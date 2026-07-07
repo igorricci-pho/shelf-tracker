@@ -429,7 +429,9 @@
   const searchResults = document.getElementById('searchResults');
   const refreshBtn = document.getElementById('refreshBtn');
 
-  const BIN_URL = 'https://extendsclass.com/api/json-storage/bin/fbffdff';
+  const SUPABASE_URL = 'https://xuankfcjstwxzdkhnnoy.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_ms69QHykXTlmYBXQuf2dNg_dFJGqrYh';
+  const REST_URL = SUPABASE_URL + '/rest/v1/shelf_data?id=eq.main';
 
   function uid() {
     return 'm' + Math.random().toString(36).slice(2, 9);
@@ -443,25 +445,22 @@
 
   async function loadData() {
     try {
-      const res = await fetch(BIN_URL);
-      if (res.ok) {
-        const parsed = await res.json();
-        if (parsed && parsed.cells) data = parsed;
-      } else {
-        const localVal = localStorage.getItem('shelf-data-v2');
-        if (localVal) {
-          const parsed = JSON.parse(localVal);
-          if (parsed && parsed.cells) data = parsed;
+      const res = await fetch(REST_URL + '&select=data', {
+        headers: {
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY
         }
+      });
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows[0] && rows[0].data && rows[0].data.cells) {
+          data = rows[0].data;
+        }
+      } else {
+        throw new Error('Failed to load from Supabase');
       }
     } catch (e) {
-      try {
-        const localVal = localStorage.getItem('shelf-data-v2');
-        if (localVal) {
-          const parsed = JSON.parse(localVal);
-          if (parsed && parsed.cells) data = parsed;
-        }
-      } catch (err) {}
+      statusLine.textContent = 'Could not load from cloud — check your connection.';
     }
     loaded = true;
     render();
@@ -470,28 +469,22 @@
   async function saveData() {
     statusLine.textContent = 'Saving...';
     try {
-      const res = await fetch(BIN_URL, {
-        method: 'PUT',
+      const res = await fetch(REST_URL, {
+        method: 'PATCH',
         headers: {
-          'Content-Type': 'application/json'
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=minimal'
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify({ data: data })
       });
       if (!res.ok) throw new Error('Failed to save to cloud');
-      
-      try {
-        localStorage.setItem('shelf-data-v2', JSON.stringify(data));
-      } catch (e) {}
 
       statusLine.textContent = 'Saved';
       setTimeout(() => { if (statusLine.textContent === 'Saved') statusLine.textContent = ''; }, 1500);
     } catch (e) {
-      statusLine.textContent = 'Could not save to cloud — check your connection.';
-      try {
-        localStorage.setItem('shelf-data-v2', JSON.stringify(data));
-        statusLine.textContent = 'Saved locally (offline)';
-        setTimeout(() => { if (statusLine.textContent.includes('Saved')) statusLine.textContent = ''; }, 2000);
-      } catch (err) {}
+      statusLine.textContent = 'Could not save — check your connection and try again.';
     }
   }
 
